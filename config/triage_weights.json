@@ -1,0 +1,6 @@
+{
+  "_comment": "Multipliers applied to raw risk score based on where a device is used. Higher multiplier = more urgent even at the same raw risk %. Edit these numbers to match real hospital policy without touching any Python code.",
+  "ICU": 1.5,
+  "General Ward": 1.0,
+  "Storage": 0.7
+}

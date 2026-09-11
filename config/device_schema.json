@@ -1,0 +1,84 @@
+{
+  "_comment": "This file is the REUSABILITY layer. To onboard a new device type, add a new entry here — no Python code changes needed. Keys must match the exact 'classification' text from the real devices.csv. Each entry lists which telemetry fields apply and realistic min/max ranges used by the synthetic data generator, plus a ward_criticality used by triage weighting.",
+
+  "Cardiovascular Devices": {
+    "fields": ["temperature", "vibration", "voltage", "hours_used"],
+    "ranges": {"temperature": [30, 45], "vibration": [0.0, 5.0], "voltage": [200, 240], "hours_used": [0, 20000]},
+    "ward_criticality": "ICU"
+  },
+  "Orthopedic Devices": {
+    "fields": ["vibration", "voltage", "hours_used"],
+    "ranges": {"vibration": [0.0, 8.0], "voltage": [200, 240], "hours_used": [0, 15000]},
+    "ward_criticality": "General Ward"
+  },
+  "General Hospital and Personal Use Devices": {
+    "fields": ["temperature", "voltage", "hours_used"],
+    "ranges": {"temperature": [20, 40], "voltage": [200, 240], "hours_used": [0, 12000]},
+    "ward_criticality": "General Ward"
+  },
+  "General and Plastic Surgery Devices": {
+    "fields": ["temperature", "vibration", "hours_used"],
+    "ranges": {"temperature": [25, 42], "vibration": [0.0, 4.0], "hours_used": [0, 14000]},
+    "ward_criticality": "General Ward"
+  },
+  "Radiology Devices": {
+    "fields": ["temperature", "vibration", "voltage", "hours_used"],
+    "ranges": {"temperature": [25, 50], "vibration": [0.0, 6.0], "voltage": [210, 250], "hours_used": [0, 25000]},
+    "ward_criticality": "General Ward"
+  },
+  "Clinical Chemistry and Clinical Toxicology Devices": {
+    "fields": ["temperature", "voltage", "hours_used"],
+    "ranges": {"temperature": [15, 35], "voltage": [200, 240], "hours_used": [0, 16000]},
+    "ward_criticality": "General Ward"
+  },
+  "Anesthesiology Devices": {
+    "fields": ["temperature", "voltage", "hours_used"],
+    "ranges": {"temperature": [20, 40], "voltage": [200, 240], "hours_used": [0, 18000]},
+    "ward_criticality": "ICU"
+  },
+  "Gastroenterology-Urology Devices": {
+    "fields": ["vibration", "voltage", "hours_used"],
+    "ranges": {"vibration": [0.0, 5.0], "voltage": [200, 240], "hours_used": [0, 13000]},
+    "ward_criticality": "General Ward"
+  },
+  "Immunology and Microbiology Devices": {
+    "fields": ["temperature", "voltage", "hours_used"],
+    "ranges": {"temperature": [15, 35], "voltage": [200, 240], "hours_used": [0, 15000]},
+    "ward_criticality": "General Ward"
+  },
+  "Neurological Devices": {
+    "fields": ["temperature", "vibration", "voltage", "hours_used"],
+    "ranges": {"temperature": [25, 42], "vibration": [0.0, 4.0], "voltage": [200, 240], "hours_used": [0, 17000]},
+    "ward_criticality": "ICU"
+  },
+  "Hematology and Pathology Devices": {
+    "fields": ["temperature", "voltage", "hours_used"],
+    "ranges": {"temperature": [15, 35], "voltage": [200, 240], "hours_used": [0, 15000]},
+    "ward_criticality": "General Ward"
+  },
+  "Dental Devices": {
+    "fields": ["vibration", "voltage", "hours_used"],
+    "ranges": {"vibration": [0.0, 6.0], "voltage": [200, 240], "hours_used": [0, 10000]},
+    "ward_criticality": "General Ward"
+  },
+  "Ophthalmic Devices": {
+    "fields": ["temperature", "voltage", "hours_used"],
+    "ranges": {"temperature": [20, 38], "voltage": [200, 240], "hours_used": [0, 11000]},
+    "ward_criticality": "General Ward"
+  },
+  "Physical Medicine Devices": {
+    "fields": ["vibration", "voltage", "hours_used"],
+    "ranges": {"vibration": [0.0, 7.0], "voltage": [200, 240], "hours_used": [0, 12000]},
+    "ward_criticality": "General Ward"
+  },
+  "Obstetrical and Gynecological Devices": {
+    "fields": ["temperature", "voltage", "hours_used"],
+    "ranges": {"temperature": [25, 40], "voltage": [200, 240], "hours_used": [0, 13000]},
+    "ward_criticality": "ICU"
+  },
+  "Ear, Nose, and Throat Devices": {
+    "fields": ["vibration", "voltage", "hours_used"],
+    "ranges": {"vibration": [0.0, 5.0], "voltage": [200, 240], "hours_used": [0, 9000]},
+    "ward_criticality": "General Ward"
+  }
+}
