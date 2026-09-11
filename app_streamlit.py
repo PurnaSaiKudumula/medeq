@@ -27,7 +27,13 @@ import html
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
-API_BASE_URL = "http://127.0.0.1:8000"
+# Backend API location.
+#
+# Local development uses http://127.0.0.1:8000 (the default). When the app
+# is deployed (e.g. on Render), set the API_BASE_URL environment variable on
+# the *frontend* service to the public URL of the *backend* service
+# (e.g. https://medeq-api.onrender.com) — Streamlit picks it up automatically.
+API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000")
 
 # ===========================================================================
 # PAGE CONFIG
