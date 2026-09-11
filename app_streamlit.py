@@ -707,7 +707,11 @@ def check_system_status() -> tuple[bool, bool, str]:
 
     backend_ok, llm_ok, msg = False, False, ""
     try:
-        r = requests.get(f"{API_BASE_URL}/", timeout=5)
+        # Health check with a generous read timeout: on Render's free tier the
+        # backend instance spins down after inactivity and can take 30-60s to
+        # wake, so a short timeout (e.g. 5s) wrongly reports "unreachable"
+        # right when the operator opens the dashboard. (10s connect, 90s read.)
+        r = requests.get(f"{API_BASE_URL}/", timeout=(10, 90))
         r.raise_for_status()
         backend_ok = True
         data = r.json()
@@ -1623,7 +1627,8 @@ with tab3:
     """, unsafe_allow_html=True)
 
     try:
-        metrics = requests.get(f"{API_BASE_URL}/model_metrics", timeout=10).json()
+        # Generous read timeout: same free-tier wake-up reason as above.
+        metrics = requests.get(f"{API_BASE_URL}/model_metrics", timeout=(10, 60)).json()
 
         col1, col2 = st.columns(2)
 
