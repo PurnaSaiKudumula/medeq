@@ -699,7 +699,10 @@ def check_system_status() -> tuple[bool, bool, str]:
     """
     _now = time.time()
     cached = st.session_state.get("_llm_status_cache")
-    if cached and (_now - cached[2]) < 180:
+    # Cache successes longer (180s) than failures (60s): a transient probe
+    # timeout (cold Gemini call on hosted free tiers can exceed 10s) must
+    # not leave the pill stuck on "LLM Offline" for 3 minutes.
+    if cached and (_now - cached[2]) < (180 if cached[1] else 60):
         return cached[0], cached[1], cached[3]
 
     backend_ok, llm_ok, msg = False, False, ""
@@ -714,7 +717,7 @@ def check_system_status() -> tuple[bool, bool, str]:
             # LLM configured — now verify it can actually answer (quota may
             # still be exhausted even though config succeeded).
             try:
-                probe = requests.get(f"{API_BASE_URL}/test_llm", timeout=(5, 10))
+                probe = requests.get(f"{API_BASE_URL}/test_llm", timeout=(10, 60))
                 probe.raise_for_status()
                 probe_data = probe.json()
                 if probe_data.get("status") == "LLM is working":
