@@ -683,7 +683,7 @@ def call_api(endpoint: str, payload: dict, timeout: int = 10) -> dict | None:
         st.error("Backend API is not running. Start it with: `uvicorn src.api:app --reload`")
         return None
     except requests.exceptions.Timeout:
-        st.error("Backend API timed out. The model may be loading (or the LLM response is slow).")
+        st.error("Backend API timed out. On Render free tier this usually means the service is still waking up from sleep — try again in 30–60 s. If it persists, the Gemini LLM may be slow or quota-exhausted.")
         return None
     except requests.exceptions.RequestException as e:
         st.error(f"Could not reach backend ({endpoint}). Error: {e}")
@@ -1517,7 +1517,7 @@ with tab1:
                     "ward_criticality": sop_alert["ward_criticality"],
                     "estimated_days_remaining": sop_alert["estimated_days_remaining"],
                     "recommended_action": sop_alert["recommended_action"],
-                }, timeout=90)
+                }, timeout=180)
                 if sop_result:
                     # BELT-AND-SUSPENDERS: the backend already sanitizes LLM
                     # output, but Normalize it AGAIN here the moment the
