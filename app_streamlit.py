@@ -410,6 +410,12 @@ st.markdown("""
     .driver-bar.positive { background: var(--high); }
     .driver-bar.negative { background: var(--low); }
 
+    .driver-desc {
+        font-size: 0.78rem;
+        color: var(--muted);
+        margin-top: 1px;
+    }
+
     /* ====== ACTION BADGES ====== */
     .action-badge {
         display: inline-block;
@@ -795,6 +801,60 @@ def get_ward_badge_class(ward: str) -> str:
     return "general"
 
 
+def describe_driver(feature_name: str, impact: float) -> str:
+    """Plain-English interpretation of a single SHAP risk driver.
+
+    A positive impact means the feature is INCREASING predicted failure
+    risk; a negative impact means it is REDUCING risk. The phrase is kept
+    short (~8 words max) so it fits under the driver bar without wrapping.
+    Returns empty string for unrecognised names so the UI degrades gracefully.
+    """
+    positive = impact > 0
+    descriptions = {
+        "Device Age": (
+            "Older device — raising risk" if positive
+            else "Relatively young — lowering risk"
+        ),
+        "Temperature": (
+            "Elevated temperature — raising risk" if positive
+            else "Normal temperature range — lowering risk"
+        ),
+        "Vibration": (
+            "High vibration levels — raising risk" if positive
+            else "Low vibration levels — lowering risk"
+        ),
+        "Voltage": (
+            "Abnormal voltage readings — raising risk" if positive
+            else "Stable voltage levels — lowering risk"
+        ),
+        "Usage Hours": (
+            "High cumulative usage — raising risk" if positive
+            else "Low cumulative usage — lowering risk"
+        ),
+        "Manufacturer Recall History": (
+            "Manufacturer has prior recalls — raising risk" if positive
+            else "Manufacturer has a clean recall record"
+        ),
+        "Device Category": (
+            "Higher-risk device type — raising risk" if positive
+            else "Lower-risk device type — lowering risk"
+        ),
+        "Temperature Sensor Not Tracked": (
+            "Sensor absent — cannot monitor temperature"
+        ),
+        "Vibration Sensor Not Tracked": (
+            "Sensor absent — cannot monitor vibration"
+        ),
+        "Voltage Sensor Not Tracked": (
+            "Sensor absent — cannot monitor voltage"
+        ),
+        "Usage Hours Not Tracked": (
+            "Sensor absent — cannot monitor usage hours"
+        ),
+    }
+    return descriptions.get(feature_name, "")
+
+
 def render_fleet_overview(alerts: list):
     """
     Renders the four summary cards at the top of the Device Risk List:
@@ -908,13 +968,18 @@ def render_alert_card(alert: dict):
         impact_class = "positive" if impact > 0 else "negative"
         arrow = "↑" if impact > 0 else "↓"
         bar_pct = min(100, (abs(impact) / max_impact) * 100) if max_impact > 0 else 0
+        desc = html.escape(describe_driver(d['feature'], impact))
+        desc_line = f'<div class="driver-desc">{desc}</div>' if desc else ""
         driver_html += f"""
-        <div class="driver-row">
-            <span class="driver-feature">{d['feature']}</span>
-            <div style="flex:1;margin:0 12px;">
-                <div class="driver-bar {impact_class}" style="width:{bar_pct}%;"></div>
+        <div style="margin-bottom:4px;">
+            <div class="driver-row">
+                <span class="driver-feature">{d['feature']}</span>
+                <div style="flex:1;margin:0 12px;">
+                    <div class="driver-bar {impact_class}" style="width:{bar_pct}%;"></div>
+                </div>
+                <span class="driver-impact {impact_class}">{arrow} {impact:+.4f}</span>
             </div>
-            <span class="driver-impact {impact_class}">{arrow} {impact:+.4f}</span>
+            {desc_line}
         </div>
         """
 
@@ -1336,83 +1401,95 @@ with tab1:
 
         st.markdown('<div class="section-header">Device Risk Priority</div>', unsafe_allow_html=True)
 
-        # Paginated table
-        page_size = 10
-        page_count = max(1, (len(alerts_sorted) + page_size - 1) // page_size)
-        page_options = [f"Page {p} of {page_count}" for p in range(1, page_count + 1)]
-
-        col_page, col_hint = st.columns([1, 2])
-        with col_page:
-            selected_page = st.selectbox("Navigate", page_options, label_visibility="collapsed", key="risk_results_page")
-        page_number = page_options.index(selected_page) + 1
-        start = (page_number - 1) * page_size
-        page_alerts = alerts_sorted[start:start + page_size]
-
-        table_rows = []
-        for alert in page_alerts:
-            risk = alert["raw_risk_score_pct"]
-            table_rows.append({
-                "Device": alert["device_name"],
-                "Category": alert["classification"],
-                "Ward": alert["ward_criticality"],
-                "Risk": f"{risk:.1f}%",
-                "Status": get_risk_label(risk),
-                "Priority": f"{alert['priority_score']:.1f}",
-                "RUL (days)": f"{alert['estimated_days_remaining']:.1f}",
-            })
-
-        with col_hint:
-            st.caption(f"Showing {start + 1}-{min(start + page_size, len(alerts_sorted))} of {len(alerts_sorted)} devices, sorted by triage priority")
-
-        # Click a table row to select that device — the detail view below
-        # (RUL bar + risk drivers + SHAP) follows the table selection.
-        selection = st.dataframe(
-            pd.DataFrame(table_rows),
-            hide_index=True,
-            width="stretch",
-            height=430,
-            on_select="rerun",
-            selection_mode="single-row",
-            key="risk_results_table",
+        # Search filters the ALREADY-SCANNED results held in session_state
+        # — never re-calls the API, so typing in the box can't trigger 50
+        # new HTTP requests (or burn LLM quota). Matches device name and
+        # classification, case-insensitive, partial string.
+        search_query = st.text_input(
+            "🔍 Search devices",
+            "",
+            placeholder="Filter by device name or classification...",
+            key="device_search",
         )
 
-        # Determine which device is "selected": prefer the row clicked in
-        # the table; otherwise fall back to the dropdown.
-        detail_options = [f"{a['device_name']} | {a['raw_risk_score_pct']:.1f}% risk" for a in page_alerts]
-        try:
-            selected_rows = st.session_state["risk_results_table"]["selection"]["rows"]
-            table_idx = selected_rows[0] if selected_rows else None
-        except (KeyError, IndexError, TypeError):
-            table_idx = None
-
-        if table_idx is not None and 0 <= table_idx < len(page_alerts):
-            selected_alert = page_alerts[table_idx]
-            st.success(f"Row selected: **{selected_alert['device_name']}** — details shown below. Click a different row or use the dropdown to change.")
+        if search_query.strip():
+            q = search_query.strip().lower()
+            alerts_filtered = [
+                a for a in alerts_sorted
+                if q in a["device_name"].lower() or q in a["classification"].lower()
+            ]
         else:
-            selected_detail = st.selectbox("View device details", detail_options, key="risk_detail_device")
-            selected_alert = page_alerts[detail_options.index(selected_detail)]
+            alerts_filtered = alerts_sorted
 
-        st.markdown('<div class="section-header">Selected Device</div>', unsafe_allow_html=True)
-        render_alert_card(selected_alert)
+        st.caption(f"Showing {len(alerts_filtered)} of {len(alerts_sorted)} devices — sorted by triage priority")
 
-        # SHAP Explanation
-        st.markdown('<div class="section-header">Why This Risk? (SHAP Explanation)</div>', unsafe_allow_html=True)
-        max_impact = max((abs(d["impact"]) for d in selected_alert.get("top_drivers", [])), default=1)
-        for d in selected_alert.get("top_drivers", []):
-            impact = d["impact"]
-            color = "var(--high)" if impact > 0 else "var(--low)"
-            direction = "increases" if impact > 0 else "decreases"
-            bar_w = min(100, (abs(impact) / max_impact) * 100)
-            st.markdown(f"""
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
-                <div style="min-width:180px;font-weight:600;font-size:0.9rem;">{d['feature']}</div>
-<div style="flex:1;background:var(--track);border-radius:4px;height:10px;">
-                        <div style="width:{bar_w}%;height:100%;background:{color};border-radius:4px;"></div>
+        if not alerts_filtered:
+            st.info("No devices match your search — try a different term or clear the search box.")
+        else:
+            table_rows = []
+            for alert in alerts_filtered:
+                risk = alert["raw_risk_score_pct"]
+                table_rows.append({
+                    "Device": alert["device_name"],
+                    "Category": alert["classification"],
+                    "Ward": alert["ward_criticality"],
+                    "Risk": f"{risk:.1f}%",
+                    "Status": get_risk_label(risk),
+                    "Priority": f"{alert['priority_score']:.1f}",
+                    "RUL (days)": f"{alert['estimated_days_remaining']:.1f}",
+                })
+
+            # Fixed-height dataframe gives all devices a single scrollable
+            # list — no pagination state or page buttons to keep in sync.
+            selection = st.dataframe(
+                pd.DataFrame(table_rows),
+                hide_index=True,
+                width="stretch",
+                height=430,
+                on_select="rerun",
+                selection_mode="single-row",
+                key="risk_results_table",
+            )
+
+            # Determine which device is "selected": prefer the row clicked
+            # in the table; otherwise fall back to the top-ranked filter.
+            try:
+                selected_rows = st.session_state["risk_results_table"]["selection"]["rows"]
+                table_idx = selected_rows[0] if selected_rows else None
+            except (KeyError, IndexError, TypeError):
+                table_idx = None
+
+            if table_idx is not None and 0 <= table_idx < len(alerts_filtered):
+                selected_alert = alerts_filtered[table_idx]
+                st.success(f"Row selected: **{selected_alert['device_name']}** — details shown below. Click a different row to change.")
+            else:
+                selected_alert = alerts_filtered[0]
+
+            st.markdown('<div class="section-header">Selected Device</div>', unsafe_allow_html=True)
+            render_alert_card(selected_alert)
+
+            # SHAP Explanation
+            st.markdown('<div class="section-header">Why This Risk? (SHAPley Additive exPlanations)</div>', unsafe_allow_html=True)
+            max_impact = max((abs(d["impact"]) for d in selected_alert.get("top_drivers", [])), default=1)
+            for d in selected_alert.get("top_drivers", []):
+                impact = d["impact"]
+                color = "var(--high)" if impact > 0 else "var(--low)"
+                bar_w = min(100, (abs(impact) / max_impact) * 100)
+                desc = html.escape(describe_driver(d['feature'], impact))
+                desc_line = f'<div class="driver-desc">{desc}</div>' if desc else ""
+                st.markdown(f"""
+                <div style="margin-bottom:8px;">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div style="min-width:180px;font-weight:600;font-size:0.9rem;">{d['feature']}</div>
+                        <div style="flex:1;background:var(--track);border-radius:4px;height:10px;">
+                            <div style="width:{bar_w}%;height:100%;background:{color};border-radius:4px;"></div>
+                        </div>
+                        <div style="min-width:90px;font-weight:700;color:{color};text-align:right;">{impact:+.4f}</div>
                     </div>
-                    <div style="min-width:90px;font-weight:700;color:{color};text-align:right;">{impact:+.4f}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        st.caption("Red bars = feature increases predicted risk. Green bars = feature decreases predicted risk.")
+                    {desc_line}
+                </div>
+                """, unsafe_allow_html=True)
+            st.caption("Red bars = feature increases predicted risk. Green bars = feature decreases predicted risk.")
 
         # SOP Generation
         st.markdown('<div class="section-header">Generate SOP Work Order</div>', unsafe_allow_html=True)
@@ -1591,7 +1668,7 @@ with tab2:
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown('<div class="section-header">Why This Score? (SHAP Feature Drivers)</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-header">Why This Score? (SHAPley Additive exPlanations)</div>', unsafe_allow_html=True)
 
             drivers = result["top_drivers"]
             max_imp = max((abs(d["impact"]) for d in drivers), default=1)
@@ -1599,13 +1676,18 @@ with tab2:
                 imp = d["impact"]
                 color = "var(--high)" if imp > 0 else "var(--low)"
                 bar_w = min(100, (abs(imp) / max_imp) * 100)
+                desc = html.escape(describe_driver(d['feature'], imp))
+                desc_line = f'<div class="driver-desc">{desc}</div>' if desc else ""
                 st.markdown(f"""
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
-                    <div style="min-width:180px;font-weight:600;font-size:0.9rem;">{d['feature']}</div>
-                    <div style="flex:1;background:var(--track);border-radius:4px;height:10px;">
-                        <div style="width:{bar_w}%;height:100%;background:{color};border-radius:4px;"></div>
+                <div style="margin-bottom:8px;">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div style="min-width:180px;font-weight:600;font-size:0.9rem;">{d['feature']}</div>
+                        <div style="flex:1;background:var(--track);border-radius:4px;height:10px;">
+                            <div style="width:{bar_w}%;height:100%;background:{color};border-radius:4px;"></div>
+                        </div>
+                        <div style="min-width:90px;font-weight:700;color:{color};text-align:right;">{imp:+.4f}</div>
                     </div>
-                    <div style="min-width:90px;font-weight:700;color:{color};text-align:right;">{imp:+.4f}</div>
+                    {desc_line}
                 </div>
                 """, unsafe_allow_html=True)
             st.caption("Red = increases risk. Green = decreases risk.")
